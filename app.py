@@ -1,8 +1,16 @@
 import streamlit as st
+from datetime import time
 
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
+
+
+def _format_due_time(value: time | None) -> str:
+    """Render due times consistently for tables and warnings."""
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+    return "No due time"
 
 st.title("🐾 PawPal+")
 
@@ -118,6 +126,8 @@ with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 
 is_mandatory = st.checkbox("Mandatory task", value=False)
+set_due_time = st.checkbox("Set due time", value=True)
+due_time_value = st.time_input("Due time", value=time(9, 0), disabled=not set_due_time)
 
 if st.button("Add task"):
     if not selected_pet_id:
@@ -131,6 +141,7 @@ if st.button("Add task"):
             duration_minutes=int(duration),
             priority=priority,
             is_mandatory=is_mandatory,
+            due_time=due_time_value if set_due_time else None,
         )
         st.session_state.owner.add_task_to_pet(selected_pet_id, task)
         st.session_state.task_counter += 1
@@ -139,20 +150,65 @@ if st.button("Add task"):
 
 all_tasks = st.session_state.owner.get_all_tasks(include_completed=True)
 if all_tasks:
+    status_filter = st.selectbox(
+        "Filter by status",
+        options=["All", "Incomplete only", "Completed only"],
+        index=1,
+    )
+    pet_filter_options = ["All pets"] + [
+        pet.name for pet in st.session_state.owner.pets.values()
+    ]
+    pet_filter = st.selectbox("Filter by pet", options=pet_filter_options, index=0)
+
+    completed_filter = None
+    if status_filter == "Incomplete only":
+        completed_filter = False
+    elif status_filter == "Completed only":
+        completed_filter = True
+
+    selected_pet_name = None if pet_filter == "All pets" else pet_filter
+    sorted_tasks = st.session_state.scheduler.sort_by_time(tasks=all_tasks)
+    filtered_tasks = st.session_state.scheduler.filter_tasks(
+        tasks=sorted_tasks,
+        completed=completed_filter,
+        pet_name=selected_pet_name,
+    )
+
     task_table = [
         {
             "task_id": task.task_id,
             "pet": st.session_state.owner.get_pet(task.pet_id).name,
             "description": task.description,
+            "due_time": _format_due_time(task.due_time),
             "duration_minutes": task.duration_minutes,
             "priority": task.priority,
             "mandatory": task.is_mandatory,
             "completed": task.completed,
         }
-        for task in all_tasks
+        for task in filtered_tasks
     ]
-    st.write("Current tasks:")
-    st.table(task_table)
+
+    active_sorted_tasks = st.session_state.scheduler.sort_by_time(
+        tasks=st.session_state.owner.get_all_tasks(include_completed=False)
+    )
+    conflict_warnings = st.session_state.scheduler.detect_time_conflicts(
+        tasks=active_sorted_tasks
+    )
+
+    if conflict_warnings:
+        st.warning("Scheduling conflicts detected. Review these time collisions:")
+        for warning in conflict_warnings:
+            st.warning(
+                f"{warning} Consider staggering one task by 10-15 minutes for smoother care."
+            )
+    else:
+        st.success("No time conflicts detected in active tasks.")
+
+    st.write("Current tasks (sorted and filtered):")
+    if task_table:
+        st.table(task_table)
+    else:
+        st.info("No tasks match the selected filters.")
 else:
     st.info("No tasks yet. Add one above.")
 
@@ -164,20 +220,27 @@ st.caption("Generate a plan from persisted Owner/Pet/Task objects.")
 if st.button("Generate schedule"):
     st.session_state.scheduler.retrieve_tasks_from_owner(include_completed=False)
     plan = st.session_state.scheduler.build_daily_plan()
+    plan_conflicts = st.session_state.scheduler.detect_time_conflicts(tasks=plan)
 
     if plan:
         schedule_table = [
             {
                 "pet": st.session_state.owner.get_pet(task.pet_id).name,
                 "task": task.description,
+                "due_time": _format_due_time(task.due_time),
                 "duration_minutes": task.duration_minutes,
                 "priority": task.priority,
                 "mandatory": task.is_mandatory,
             }
             for task in plan
         ]
+        st.success("Schedule generated successfully.")
         st.write("Today's Schedule:")
         st.table(schedule_table)
+        if plan_conflicts:
+            st.warning("Heads up: this plan has time conflicts that may be stressful for pets.")
+            for warning in plan_conflicts:
+                st.warning(warning)
         st.text(st.session_state.scheduler.explain_plan(plan))
     else:
         st.info("No schedulable tasks found. Add pets/tasks first.")

@@ -29,8 +29,13 @@ classDiagram
 			+available_minutes_per_day: int
 			+preferences: dict
 			+pet_ids: list
+			+pets: dict
 			+update_preferences(preferences)
 			+set_daily_availability(minutes)
+			+add_pet(pet)
+			+get_pet(pet_id) Pet
+			+add_task_to_pet(pet_id, task)
+			+get_all_tasks(include_completed) list~Task~
 		}
 
 		class Pet {
@@ -40,38 +45,53 @@ classDiagram
 			+species: str
 			+age_years: int
 			+care_notes: list
+			+tasks: list~Task~
 			+add_care_note(note)
 			+get_profile_summary() str
+			+add_task(task)
+			+get_tasks(include_completed) list~Task~
 		}
 
 		class Task {
 			+task_id: str
 			+pet_id: str
-			+title: str
+			+description: str
 			+category: str
 			+duration_minutes: int
 			+priority: str
+			+frequency: str
+			+due_time: time
 			+time_window: tuple
 			+is_mandatory: bool
+			+completed: bool
+			+mark_completed()
+			+mark_incomplete()
 			+is_feasible(available_minutes) bool
 			+priority_score() int
 		}
 
-		class DailyScheduler {
+		class Scheduler {
 			+owner: Owner
-			+pet: Pet
 			+tasks: list~Task~
 			+add_task(task)
+			+retrieve_tasks_from_owner(include_completed) list~Task~
+			+sort_by_time(tasks) list~Task~
+			+filter_tasks(tasks, completed, pet_name) list~Task~
+			+detect_time_conflicts(tasks) list~str~
+			+complete_task(task_id) Task
 			+rank_tasks() list~Task~
-			+build_daily_plan() list
+			+build_daily_plan() list~Task~
 			+explain_plan(plan) str
 		}
 
-		Owner "1" --> "1..*" Pet : cares_for
-		Pet "1" --> "0..*" Task : needs
-		DailyScheduler "1" --> "1" Owner : uses
-		DailyScheduler "1" --> "1" Pet : plans_for
-		DailyScheduler "1" --> "0..*" Task : schedules
+		class DailyScheduler {
+		}
+
+		DailyScheduler --|> Scheduler : alias_of
+		Owner "1" --> "0..*" Pet : owns
+		Pet "1" --> "0..*" Task : has
+		Scheduler "1" --> "1" Owner : uses
+		Scheduler "1" --> "0..*" Task : manages
 ```
 
 **b. Design changes**
