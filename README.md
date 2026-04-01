@@ -31,6 +31,24 @@ The scheduler now includes a few practical algorithmic upgrades:
 - Lightweight conflict detection: the scheduler reports warnings when multiple tasks share the same due time.
 - Stable ordering behavior: tie-breakers (priority and task ID) keep output deterministic and easier to debug.
 
+## Demo
+
+### Home Screen
+
+![PawPal+ home screen](assets/screenshots/home.png)
+
+### Add Pets and Tasks
+
+![Adding pets and tasks](assets/screenshots/add_pet_task.png)
+
+### Sorted Tasks and Conflict Warnings
+
+![Sorted tasks and conflict warnings](assets/screenshots/sorted_tasks_conflicts.png)
+
+### Generated Daily Schedule
+
+![Generated schedule output](assets/screenshots/generated_schedule.png)
+
 ## Getting started
 
 ### Setup
