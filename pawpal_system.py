@@ -286,6 +286,55 @@ class Scheduler:
 
         return warnings
 
+    def _find_task(self, task_id: str) -> Task:
+        """Locate a task by ID across all owner tasks."""
+        for task in self.owner.get_all_tasks(include_completed=True):
+            if task.task_id == task_id:
+                return task
+        raise KeyError(f"task '{task_id}' not found")
+
+    def _next_recurring_task_id(self, base_task_id: str) -> str:
+        """Create a unique task ID for the next recurring occurrence."""
+        existing_ids = {
+            task.task_id for task in self.owner.get_all_tasks(include_completed=True)
+        }
+        index = 1
+        while True:
+            candidate = f"{base_task_id}__r{index}"
+            if candidate not in existing_ids:
+                return candidate
+            index += 1
+
+    def complete_task(self, task_id: str) -> Optional[Task]:
+        """Complete one task and create next occurrence for daily recurrence.
+
+        Returns:
+            The newly created recurring task when applicable; otherwise None.
+        """
+        task = self._find_task(task_id)
+        if task.completed:
+            return None
+
+        task.mark_completed()
+        if task.frequency.lower() != "daily":
+            return None
+
+        next_task = Task(
+            task_id=self._next_recurring_task_id(task.task_id),
+            pet_id=task.pet_id,
+            description=task.description,
+            category=task.category,
+            duration_minutes=task.duration_minutes,
+            priority=task.priority,
+            frequency=task.frequency,
+            due_time=task.due_time,
+            time_window=task.time_window,
+            is_mandatory=task.is_mandatory,
+            completed=False,
+        )
+        self.add_task(next_task)
+        return next_task
+
     def rank_tasks(self) -> list[Task]:
         """Return tasks sorted by urgency/priority and constraints."""
         if not self.tasks:

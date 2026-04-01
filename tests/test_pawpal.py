@@ -313,3 +313,136 @@ class TestScheduler:
         # Should fit only one 30-minute task
         assert len(plan) == 1
         assert plan[0].duration_minutes == 30
+
+    def test_sorting_correctness_chronological_order(self):
+        """Verify tasks are sorted in chronological order by due_time."""
+        owner = Owner(owner_id="owner_001", name="Jordan", available_minutes_per_day=120)
+        pet = Pet(
+            pet_id="pet_001",
+            owner_id="owner_001",
+            name="Mochi",
+            species="dog",
+            age_years=3,
+        )
+        owner.add_pet(pet)
+
+        t1 = Task(
+            task_id="task_001",
+            pet_id="pet_001",
+            description="Lunch feeding",
+            category="feeding",
+            duration_minutes=15,
+            priority="medium",
+            due_time=time(12, 0),
+        )
+        t2 = Task(
+            task_id="task_002",
+            pet_id="pet_001",
+            description="Morning walk",
+            category="exercise",
+            duration_minutes=20,
+            priority="high",
+            due_time=time(8, 0),
+        )
+        t3 = Task(
+            task_id="task_003",
+            pet_id="pet_001",
+            description="Evening meds",
+            category="medical",
+            duration_minutes=10,
+            priority="high",
+            due_time=time(18, 30),
+        )
+
+        owner.add_task_to_pet("pet_001", t1)
+        owner.add_task_to_pet("pet_001", t2)
+        owner.add_task_to_pet("pet_001", t3)
+
+        scheduler = Scheduler(owner)
+        sorted_tasks = scheduler.sort_by_time()
+
+        assert [task.task_id for task in sorted_tasks] == ["task_002", "task_001", "task_003"]
+
+    def test_recurrence_logic_daily_completion_creates_next_task(self):
+        """Verify completing a daily task creates a new incomplete occurrence."""
+        owner = Owner(owner_id="owner_001", name="Jordan", available_minutes_per_day=120)
+        pet = Pet(
+            pet_id="pet_001",
+            owner_id="owner_001",
+            name="Mochi",
+            species="dog",
+            age_years=3,
+        )
+        owner.add_pet(pet)
+
+        daily_task = Task(
+            task_id="task_daily",
+            pet_id="pet_001",
+            description="Daily walk",
+            category="exercise",
+            duration_minutes=30,
+            priority="high",
+            frequency="daily",
+            due_time=time(9, 0),
+        )
+        owner.add_task_to_pet("pet_001", daily_task)
+
+        scheduler = Scheduler(owner)
+        next_task = scheduler.complete_task("task_daily")
+
+        all_tasks = owner.get_all_tasks(include_completed=True)
+        assert daily_task.completed is True
+        assert next_task is not None
+        assert next_task.task_id != "task_daily"
+        assert next_task.description == "Daily walk"
+        assert next_task.completed is False
+        assert len(all_tasks) == 2
+
+    def test_conflict_detection_flags_duplicate_times(self):
+        """Verify scheduler detects duplicate due times and returns warnings."""
+        owner = Owner(owner_id="owner_001", name="Jordan", available_minutes_per_day=120)
+        dog = Pet(
+            pet_id="pet_001",
+            owner_id="owner_001",
+            name="Mochi",
+            species="dog",
+            age_years=3,
+        )
+        cat = Pet(
+            pet_id="pet_002",
+            owner_id="owner_001",
+            name="Whiskers",
+            species="cat",
+            age_years=5,
+        )
+        owner.add_pet(dog)
+        owner.add_pet(cat)
+
+        dog_task = Task(
+            task_id="task_001",
+            pet_id="pet_001",
+            description="Walk",
+            category="exercise",
+            duration_minutes=20,
+            priority="high",
+            due_time=time(8, 0),
+        )
+        cat_task = Task(
+            task_id="task_002",
+            pet_id="pet_002",
+            description="Feed",
+            category="feeding",
+            duration_minutes=10,
+            priority="medium",
+            due_time=time(8, 0),
+        )
+        owner.add_task_to_pet("pet_001", dog_task)
+        owner.add_task_to_pet("pet_002", cat_task)
+
+        scheduler = Scheduler(owner)
+        warnings = scheduler.detect_time_conflicts()
+
+        assert len(warnings) == 1
+        assert "08:00" in warnings[0]
+        assert "Mochi: Walk" in warnings[0]
+        assert "Whiskers: Feed" in warnings[0]
