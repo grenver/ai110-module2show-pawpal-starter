@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import time
 from typing import Any, Optional
@@ -155,6 +156,135 @@ class Scheduler:
         """Pull all tasks from the owner's pets into scheduler memory."""
         self.tasks = self.owner.get_all_tasks(include_completed=include_completed)
         return list(self.tasks)
+
+    @staticmethod
+    def _coerce_time_value(value: Any) -> time:
+        """Convert mixed time inputs into a comparable ``datetime.time`` value.
+
+        Accepts native ``time`` objects and ``"HH:MM"`` strings. Invalid or
+        missing values are mapped to ``time.max`` so they naturally sort last.
+        """
+        if value is None:
+            return time.max
+        if isinstance(value, time):
+            return value
+        if isinstance(value, str):
+            try:
+                hour_str, minute_str = value.split(":", maxsplit=1)
+                return time(int(hour_str), int(minute_str))
+            except (ValueError, TypeError):
+                return time.max
+        return time.max
+
+    def sort_by_time(self, tasks: Optional[list[Task]] = None) -> list[Task]:
+        """Return tasks ordered by due time with deterministic tie-breaks.
+
+        The method supports due times stored as ``time`` objects or ``HH:MM``
+        strings and then applies tie-breakers in this order:
+        1) higher priority first, 2) task_id ascending.
+
+        Args:
+            tasks: Optional subset of tasks to sort. When omitted, scheduler
+                memory is used; if empty, tasks are retrieved from the owner.
+
+        Returns:
+            A new list of tasks sorted from earliest to latest due time.
+        """
+        selected_tasks = list(tasks) if tasks is not None else list(self.tasks)
+        if not selected_tasks:
+            selected_tasks = self.retrieve_tasks_from_owner(include_completed=False)
+
+        return sorted(
+            selected_tasks,
+            key=lambda task: (
+                self._coerce_time_value(task.due_time),
+                -task.priority_score(),
+                task.task_id,
+            ),
+        )
+
+    def filter_tasks(
+        self,
+        tasks: Optional[list[Task]] = None,
+        completed: Optional[bool] = None,
+        pet_name: Optional[str] = None,
+    ) -> list[Task]:
+        """Filter tasks by completion state and/or pet name.
+
+        Args:
+            tasks: Optional source tasks. Falls back to scheduler memory and
+                then owner tasks when no tasks are currently loaded.
+            completed: If provided, keeps only tasks whose completed flag
+                matches this value.
+            pet_name: If provided, keeps only tasks assigned to a pet with an
+                exact case-insensitive name match.
+
+        Returns:
+            A filtered task list preserving the original order.
+        """
+        selected_tasks = list(tasks) if tasks is not None else list(self.tasks)
+        if not selected_tasks:
+            selected_tasks = self.retrieve_tasks_from_owner(include_completed=True)
+
+        filtered = selected_tasks
+
+        if completed is not None:
+            filtered = [task for task in filtered if task.completed is completed]
+
+        if pet_name is not None:
+            target = pet_name.strip().lower()
+            filtered = [
+                task
+                for task in filtered
+                if self.owner.get_pet(task.pet_id).name.lower() == target
+            ]
+
+        return filtered
+
+    def detect_time_conflicts(self, tasks: Optional[list[Task]] = None) -> list[str]:
+        """Detect exact due-time collisions and return warning messages.
+
+        This is a lightweight conflict check: it only flags tasks that share
+        the exact same due time and intentionally does not model duration
+        overlaps or interval arithmetic.
+
+        Args:
+            tasks: Optional source tasks. Falls back to scheduler memory and
+                then owner tasks when none are loaded.
+
+        Returns:
+            A list of human-readable warning strings. The list is empty when
+            no exact-time conflicts are found.
+        """
+        selected_tasks = list(tasks) if tasks is not None else list(self.tasks)
+        if not selected_tasks:
+            selected_tasks = self.retrieve_tasks_from_owner(include_completed=False)
+
+        tasks_by_time: dict[time, list[Task]] = defaultdict(list)
+        for task in selected_tasks:
+            due = task.due_time
+            if due is None:
+                continue
+            tasks_by_time[due].append(task)
+
+        warnings: list[str] = []
+        for due, grouped_tasks in sorted(tasks_by_time.items(), key=lambda item: item[0]):
+            if len(grouped_tasks) < 2:
+                continue
+
+            task_labels = [
+                f"{self.owner.get_pet(task.pet_id).name}: {task.description}"
+                for task in grouped_tasks
+            ]
+            warnings.append(
+                (
+                    f"Warning: {len(grouped_tasks)} tasks are scheduled at "
+                    f"{due.strftime('%H:%M')} -> "
+                    f"{'; '.join(task_labels)}"
+                )
+            )
+
+        return warnings
 
     def rank_tasks(self) -> list[Task]:
         """Return tasks sorted by urgency/priority and constraints."""

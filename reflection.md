@@ -94,8 +94,8 @@ These changes make object relationships direct instead of inferred. That reduces
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+- One tradeoff in my scheduler is that conflict detection only checks for exact matching due times (for example, two tasks both at 09:00), not overlapping duration ranges.
+- This is reasonable for this scenario because it keeps the algorithm lightweight, easy to debug, and clear for a first scheduling prototype. It still catches the most obvious clashes quickly without adding a full time-interval engine.
 
 ---
 

@@ -22,6 +22,15 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+The scheduler now includes a few practical algorithmic upgrades:
+
+- Time-aware sorting: tasks can be sorted by due time, including support for `HH:MM` time strings.
+- Flexible filtering: tasks can be filtered by completion state and by pet name.
+- Lightweight conflict detection: the scheduler reports warnings when multiple tasks share the same due time.
+- Stable ordering behavior: tie-breakers (priority and task ID) keep output deterministic and easier to debug.
+
 ## Getting started
 
 ### Setup

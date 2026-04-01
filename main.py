@@ -93,6 +93,7 @@ def main():
         duration_minutes=5,
         priority="high",
         frequency="daily",
+        due_time=time(9, 0),
         is_mandatory=True,
     )
 
@@ -107,20 +108,50 @@ def main():
         due_time=time(14, 0),
     )
 
-    # Add tasks to pets
-    owner.add_task_to_pet("pet_001", dog_walk)
-    owner.add_task_to_pet("pet_001", dog_feed)
+    # Add tasks intentionally out of order to test sorting.
     owner.add_task_to_pet("pet_001", dog_play)
-    owner.add_task_to_pet("pet_002", cat_feed)
     owner.add_task_to_pet("pet_002", cat_play)
+    owner.add_task_to_pet("pet_001", dog_walk)
+    owner.add_task_to_pet("pet_002", cat_feed)
+    owner.add_task_to_pet("pet_001", dog_feed)
 
     print("📝 Tasks loaded:")
     all_tasks = owner.get_all_tasks()
     for task in all_tasks:
         print(f"  - {task.description} ({task.duration_minutes} min, {task.priority})")
 
+    # Mark one task completed so completion filtering has visible behavior.
+    dog_play.mark_completed()
+
     # Create Scheduler and build today's plan
     scheduler = Scheduler(owner)
+    scheduler.retrieve_tasks_from_owner(include_completed=True)
+
+    print("\n🕒 Tasks sorted by due time:")
+    for task in scheduler.sort_by_time():
+        due_label = task.due_time.strftime("%H:%M") if task.due_time else "No due time"
+        pet_name = owner.get_pet(task.pet_id).name
+        print(f"  - {due_label:>8} | {pet_name:<8} | {task.description}")
+
+    print("\n✅ Completed tasks only:")
+    for task in scheduler.filter_tasks(completed=True):
+        pet_name = owner.get_pet(task.pet_id).name
+        print(f"  - {pet_name}: {task.description}")
+
+    print("\n🐕 Tasks for Mochi only:")
+    for task in scheduler.filter_tasks(pet_name="Mochi"):
+        status = "done" if task.completed else "pending"
+        print(f"  - {task.description} ({status})")
+
+    print("\n⚠️ Conflict check:")
+    conflict_warnings = scheduler.detect_time_conflicts()
+    if conflict_warnings:
+        for warning in conflict_warnings:
+            print(f"  - {warning}")
+    else:
+        print("  - No time conflicts found.")
+
+    scheduler.retrieve_tasks_from_owner(include_completed=False)
     plan = scheduler.build_daily_plan()
 
     print("\n" + "=" * 60)
