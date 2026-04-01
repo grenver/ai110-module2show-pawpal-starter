@@ -4,13 +4,84 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+My initial design centers on four classes: `Owner`, `Pet`, `Task`, and `DailyScheduler`.
+
+Three core user actions the system is built to support are:
+
+1. Add and manage pet profile details (name, species, age, and care preferences).
+2. Add and prioritize care tasks (walks, feeding, medication, grooming, enrichment) with duration and optional time windows.
+3. Generate and review today's care plan, including why tasks were selected and ordered.
+
+Class responsibilities:
+
+- `Owner`: Stores owner identity, daily time budget, and planning preferences.
+- `Pet`: Stores pet details and pet-specific constraints (for example, medication rules or preferred walk times).
+- `Task`: Represents a single care activity with duration, priority, category, and scheduling constraints.
+- `DailyScheduler`: Applies constraints and priorities to choose and order tasks into a realistic daily plan.
+
+Mermaid class diagram:
+
+```mermaid
+classDiagram
+		class Owner {
+			+owner_id: str
+			+name: str
+			+available_minutes_per_day: int
+			+preferences: dict
+			+pet_ids: list
+			+update_preferences(preferences)
+			+set_daily_availability(minutes)
+		}
+
+		class Pet {
+			+pet_id: str
+			+owner_id: str
+			+name: str
+			+species: str
+			+age_years: int
+			+care_notes: list
+			+add_care_note(note)
+			+get_profile_summary() str
+		}
+
+		class Task {
+			+task_id: str
+			+pet_id: str
+			+title: str
+			+category: str
+			+duration_minutes: int
+			+priority: str
+			+time_window: tuple
+			+is_mandatory: bool
+			+is_feasible(available_minutes) bool
+			+priority_score() int
+		}
+
+		class DailyScheduler {
+			+owner: Owner
+			+pet: Pet
+			+tasks: list~Task~
+			+add_task(task)
+			+rank_tasks() list~Task~
+			+build_daily_plan() list
+			+explain_plan(plan) str
+		}
+
+		Owner "1" --> "1..*" Pet : cares_for
+		Pet "1" --> "0..*" Task : needs
+		DailyScheduler "1" --> "1" Owner : uses
+		DailyScheduler "1" --> "1" Pet : plans_for
+		DailyScheduler "1" --> "0..*" Task : schedules
+```
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes. After reviewing the class skeleton, I made two design updates to clarify relationships and avoid fragile scheduling logic later:
+
+1. I renamed `CareTask` to `Task` to keep naming consistent between UML, code, and UI language.
+2. I added explicit relationship fields in the skeleton: `Owner.pet_ids`, `Pet.owner_id`, and `Task.pet_id`.
+
+These changes make object relationships direct instead of inferred. That reduces potential logic bottlenecks when scaling from one pet to multiple pets, because the scheduler can filter tasks by `pet_id` without expensive matching or assumptions based on task titles.
 
 ---
 
