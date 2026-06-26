@@ -59,6 +59,33 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+> On Windows PowerShell, if activation is blocked by execution policy, run this once in the same session first:
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
+
+### Run the app
+
+The Streamlit entry point is `app.py` (not `streamlit_app.py`):
+
+```bash
+streamlit run app.py
+```
+
+If `streamlit` isn't on your PATH, run it through the interpreter instead:
+
+```bash
+python -m streamlit run app.py
+```
+
+Then open the local URL Streamlit prints (usually http://localhost:8501).
+
+You can also run the terminal demo to verify the core logic without the UI:
+
+```bash
+python main.py
+```
+
 ### Suggested workflow
 
 1. Read the scenario carefully and identify requirements and edge cases.
